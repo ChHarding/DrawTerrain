@@ -1,3 +1,25 @@
+
+# folder for gcode created by the tool
+gcode
+
+# old stuff that doesn't need to on github
+old 
+
+# folder for inout shapefiles
+shp
+
+# printrun folder
+printrun
+
+# logfile
+logfile.txt
+
+.vscode
+*.tif
+*.STL
+
+#############################################################
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
