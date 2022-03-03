@@ -4,30 +4,31 @@
 # Jan. 21, 2022
 
 
+from sys import platform
 from osgeo import gdal # for reading geotiffs
-import matplotlib.pyplot as plt # for plotting
-import numpy as np # to get access to the elevation values that were used to create the STL
+import matplotlib.pyplot as plt
+import numpy as np
 
-# Mini state machine for visualizing tool path in matplotlib 
-last_xy=() # global for storing the last point plotted
-num_segs = 0
-col = "black"
-plt.axis("equal") # same x and y scale
+
+# For visualizing tool path in matplotlib (aka preview mode)
+last_xy=() # global for last point
+num_segs = 0 # global point (line segment) counter
+col = "black" # global color
+plt.axis("equal")
 def pl(p=None):
-    """ plot to point p from last point plotted (state machine)
+    """ plot to point p from last point (state machine)
         if no last point is stored, store p as last point and return
         to erase the last point (reset), use no arg
-        color can be set by arg as a valid color string (e.g. "red", "blue", "black", etc.)
+        color can be set by arg as a valid color string ("red", "blue", etc.)
     """
-    global last_xy, num_segs, col # HACK! these are global variable to hold state
-
-    if isinstance(p, type("str")): # interpret a string as color
+    global last_xy, num_segs, col
+    if isinstance(p, type("str")):  # set color
         col = p
         return
-    if last_xy == (): # if last_xy is still empty we're staring a new line
-        last_xy = p
+    if last_xy == (): 
+        last_xy = p # just store p and wait for next point to plot a line
         return
-    if p == None: # if no arg was given, start a new line
+    if p == None: # start new line (first point)
         last_xy = ()
         num_segs = 0
         return
@@ -36,12 +37,12 @@ def pl(p=None):
     assert p != None, "3"
     assert p != (), "4"
 
-    plt.plot((last_xy[0],p[0]), (last_xy[1],p[1]), color=col)
+    plt.plot((last_xy[0],p[0]), (last_xy[1],p[1]), color=col) #x1/x2  y1/y2  (weird ...)
     #print(num_segs,last_xy, p)
     num_segs += 1
     #print((last_xy[0],p[0]), (last_xy[1],p[1]))
     last_xy = p
-    #plt.show()  # this actually shows the plotting window, use this later when you want to preview gcode
+    #plt.show()
 
 '''
 # test
@@ -50,7 +51,7 @@ pl((10,0))
 pl((10,10))
 pl((0,10))
 pl((0,0))
-pl() # reset (start new line)
+pl() # start new line
 pl((5,5))
 pl((-2,5))
 pl((0,0))
@@ -59,106 +60,117 @@ plt.show()
 '''
 
 
-# Read in geotiff DEM raster data with GDAL
-dem_filename = "deming_5m_sm_with_DEM_1m_clipped.tif" # should later be user input from GUI
+# Read in geotiff with GDAL
+# TODO user input
+dem_filename = "deming_5m_sm_with_DEM_1m_clipped.tif"
 dem = gdal.Open(dem_filename)
 
 # get bounding box coordinates
 band = dem.GetRasterBand(1)
 ulx, xres, xskew, uly, yskew, yres  = dem.GetGeoTransform() 
-xres, yres = abs(xres), abs(yres)  # res can be negative(?) so need to use abs()
-rwidth, rheight = dem.RasterXSize, dem.RasterYSize # number of pixels in x (width) and y (height)
-rwidth_in_m, rheight_in_m = rwidth * xres, rheight * yres # pixel size in meters
+xres, yres = abs(xres), abs(yres)  # res can be negative(?) 
+rwidth, rheight = dem.RasterXSize, dem.RasterYSize # number of cells in x and y
+rwidth_in_m, rheight_in_m = rwidth * xres, rheight * yres 
 lrx = ulx + rwidth_in_m # lower right
 lry = uly - rheight_in_m
 print("raster", rwidth,"x", rheight, "cells, w/h ratio", rwidth/rheight)
 
-# real world width and height (measured) in mm (also user input)
+
+# TODO user input
+# real world width and height (measured) in mm
 mmwidth = 200
 mmheight = 240
-print("measured  model", mmwidth,"x", mmheight, "mm", "w/h ratio", mmwidth/mmheight)
+print("measured  model", mmwidth,"x", mmheight, "mm", "w/h ratio", mmwidth/mmheight )
 
 
 # get the real scaling in x and y
 wraster_to_model_scale = mmwidth / rwidth_in_m
 hraster_to_model_scale = mmheight / rheight_in_m
 
-# lets assume that the avg. xy scaling can be used for z
+# lets assume that the avg. x/y scale can be used for z
 zraster_to_model_scale = 0.1 * (hraster_to_model_scale + wraster_to_model_scale) / 2
 
 # make numpy array with the real-world elevation values
 dem_ar = band.ReadAsArray()
 
-# elevation scaling:  values are in the logfile, should be parsed automatically or be user input
+# TODO read base thickness and elev min max from logfile
+# elevation scaling: 0.6 - 27.720467 <- from logfile
 base_thickness = 0.6 # mm
 min_elev = 0.6 # mm
 max_elev = 27.720467
-
 print("model elev", min_elev, max_elev)
 raster_to_model_elev_scale = (max_elev - min_elev) / (dem_ar.max() - dem_ar.min())
 min_raster_elev = dem_ar.min()
 print("raster elev", dem_ar.min(), dem_ar.max())
 print("raster to model elevation scale:", raster_to_model_elev_scale)
 
-
-# gcode parameters (user input?)
-LINE_FEED_RATE = 120 # 600 mm/min = 10 mm/sec speed for drawing
-MOVE_FEED_RATE = 600 # speed for moves
-Z_SAFE_HEIGHT = round(dem_ar.max() * zraster_to_model_scale + 1, 3) # needs to be above the max model height
-
-print(f"Drawing speed: {LINE_FEED_RATE} mm/min")
-print(f"Move speed: {MOVE_FEED_RATE} mm/min")
+# TODO user input
+# gcode parameters
+LINE_FEED_RATE = 600 # 600 mm/min = 10 mm/sec speed for drawing
+MOVE_FEED_RATE = 1200 # speed for moves
+Z_SAFE_HEIGHT = round(dem_ar.max() * zraster_to_model_scale + 1, 3) # needs to be large enough to NOT touch the model anywhere!
 
 
-# Connect to plotter
+# Set mode here!
+# if False, will only create matplotlib preview, must be True to also send gcode to the printer
+do_plot = False 
 
-# pip install pyserial  to install the serial interface module which printrun needs!
-from printrun.printcore import printcore # I copied the printrun source into a local sub folder ...
-import time, sys
-COM = 'COM3' # find this in the Device Manager - Ports
+# Establish connection to printer
+if do_plot:
+    # pip install pyserial  -> import serial
+    from printrun.printcore import printcore # BTW I copied the printrun source into a local sub folder instead doing a proper install
+    import time, sys
+    COM = 'COM3' # TODO: user input (use the printrun desktop app to verify the port!)
 
-# printcore('/dev/ttyUSB0', 115200) on Mac or p.printcore('COM3',115200) on Windows
-try:
-  p = printcore(COM, 115200)
-except Exception as e:
-  print("Error with serial port", COM, e)
-  sys.exit("Fix this and try again!")
+    try:
+        p = printcore(COM, 115200) # printcore('/dev/ttyUSB0', 115200) on Mac or p.printcore('COM3',115200) on Windows
+    except Exception as e:
+        print("Error with serial port", COM, e)
+        sys.exit("Fix this and try again!")
 
-# wait until printer is online
-while not p.online:
-  time.sleep(1)
-  print("Waiting for device to come online ... ", end="")
-print("Device online!")
+    # wait until printer is online
+    while not p.online:
+        time.sleep(1)
+    print("Waiting for device to come online ... ", end="")
+    print("Device online!")
 
-p.send_now("M501") # show EEPROM settings
 
-# create gcode for drawing a rectangle to put the model into
-print("I will now home x and y. Use the touchpad to lower z to where the pen touches the plate")
-p.send_now("G28 X Y")
-input("Hit Enter when done with Z adjustment")
+# wrapper around send_now() to omit it for preview-only mode
+def plot(gcode):
+    global do_plot, p
+    if do_plot:
+        p.send_now("gcode")
 
-p.send_now("M82 ;absolute extrusion mode")
-p.send_now(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
+if do_plot:
+    print("I will home the x and y axis now. Manually lower z so that the pen makes contact with the bed.")
+    input("Press enter when you're done with z homing")
+
+    print("Drawing reference rectangle")
+
+    print("M82 ;absolute extrusion mode")
+    print("G28 X Y ;home x y only as z will trigger bedprobe and heating!")
+
+# go to 0,0 
+plot(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
 pl((0,0))
 
-def g1(x,y,f):
-    p.send_now(f"G1 X{x} Y{y} Z{0} F{LINE_FEED_RATE}")
+def G0(x,y): # convenience function
+    plot(f"G0 X{x} Y{y} Z{0} F{LINE_FEED_RATE}")
     pl((x,y))
 
 # draw boundary with 0/0 in left lower corner 
-g1(mmwidth, 0)
-g1(mmwidth, mmheight)
-g1(0, mmheight)
-g1(0, 0)
-#plt.show()
+G0(mmwidth, 0)
+G0(mmwidth, mmheight)
+G0(0, mmheight)
+G0(0, 0)
 
 # lift head to safe height
-print("moving to 0,0 at safe Z height")
-p.send_now(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
-input("affix model and hit enter to start plotting lines")
+plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
+#plt.show() # this will show the rectangle only    
+print("Drawing reference rectangle done")
 
 
-# read in shapefile from shp folder
+# read in line shapefile from shp folder
 import shapefile
 shpfilename = "demin_lines_1m_z.shp"
 #shpfilename = "test.shp"
@@ -171,21 +183,21 @@ assert sf.shapeTypeName == "POLYLINEZ" or sf.shapeTypeName == "POLYGON" , "Error
 
 shapes = sf.shapes() # get all shapes
 
-
-
-
-
-print("3D pLotting ", shpfilename, "lines draped on ", dem_filename)
-p.send_now(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
+# Plot lines from shapefile
+if do_plot:
+    print("Match the terrain print on the bed with the reference rectangle and clamp it down")
+    input("Press Enter to start 3D plotting")
+    print("Plotting lines from", shpfilename, "draped on", dem_filename)
+    plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # Ensure (again) that we're above the model!)
 
 # run though all features
 for lidx, ln in enumerate(shapes):
-    pl() # lift pen in viz
+    pl() # lift penn in viz
 
     # get value of first column as feature name
     ftname = sf.records()[lidx][0]
 
-    print("Drawing line #",lidx, ftname)
+    print("Drawing",lidx, ftname)
 
     # Warn if line has multiple parts (should not happen) - will always use the first and only part for now
     if len(ln.parts) > 1: # single part lines will return [0]
@@ -228,19 +240,20 @@ for lidx, ln in enumerate(shapes):
         pl((x,y))
 
         if pidx == 0: # need to move up and fly to first point
-            p.send_now(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
+            plot(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
             #print(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 
-        p.send_now(f"G1 X{x} Y{y} Z{z} F{LINE_FEED_RATE}")
+        plot(f"G0 X{x} Y{y} Z{z} F{LINE_FEED_RATE}")
         #print(f"G0 X{x} Y{y} Z{z} F{LINE_FEED_RATE}")
         pidx += 1
 
-    p.send_now(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # lift back to safe height
+    plot(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # lift back to safe height
     #print(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}\n") # lift back to safe height
 
-p.send_now(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
+plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
 #print(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
-print("Plotting done")
 
-plt.show() # show matplotlib graph
+plt.show() # quite the preview app to continue
+print("3D plot complete")
+
 
