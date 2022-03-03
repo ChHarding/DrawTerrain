@@ -1,21 +1,23 @@
 
 # folder for gcode created by the tool
 gcode
+.gcode
 
 # old stuff that doesn't need to on github
 old 
 
 # folder for inout shapefiles
-shp
+#shp
 
 # printrun folder
 printrun
+Printrun-master
 
 # logfile
 logfile.txt
 
 .vscode
-*.tif
+#*.tif
 *.STL
 
 #############################################################
