@@ -1,0 +1,37 @@
+Log for creating 1 x 1 3D model tile(s) from deming_5m_sm_with_DEM_1m_clipped.tif 
+ 
+started: 17:38:50.523433 
+source raster upper left corner (x/y):  335393.3712277749 5226663.924562767 
+source raster cells size 1.0 m  (535, 445) 
+projection: WGS 84 / UTM zone 15N 
+z-scale: 1.0 
+basethickness: 0.6 
+fileformat: STLb 
+tile_centered: False 
+no_bottom: False 
+no_normals: True 
+ignore_leq: None 
+lower_leq: None 
+importedGPX: [] 
+Warning: Given outline polygon will be ignored when using local raster file! 
+undefined GDAL value: -3.4028234663852886e+38 
+tile_width: 200 
+tile_height: 240.4494382022472 
+source raster width 445.0 m, cell size: 1.0 m, elev. min/max is 445.1136474609375 505.3699951171875 m 
+source raster 3D print resolution would be 0.449438202247191 mm 
+Warning: will re-sample to a resolution finer than the original source raster. Consider instead a value for printres > 0.449438202247191 
+re-sampling deming_5m_sm_with_DEM_1m_clipped.tif :
+  (445, 535) 0.449438202247191 mm  1.0 m  445.1136474609375 - 505.3699951171875 m to 
+  (499, 601) 0.40080160320641284 mm  0.8900000000000001 m  445.13412 - 505.35648 m 
+after resampling, requested print res was adjusted from 0.4 to 0.40080160320641284 to ensure correct model dimensions 
+map scale is 1 : 2220.55 
+Cells per tile (x/y) 499 x 601 
+using single-core only 
+
+1 x 1 tiles, tile size 200.00 x 240.88 mm
+ 
+tile 1 1 : height:  0.6 - 27.720467 mm , file size: 29 Mb 
+
+total size for all tiles: 29 Mb 
+
+processing finished: 17:39:02.763170 

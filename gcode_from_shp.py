@@ -14,7 +14,7 @@ import numpy as np
 last_xy=() # global for last point
 num_segs = 0 # global point (line segment) counter
 col = "black" # global color
-plt.axis("equal")
+plt.axis("equal") # shows empty plot window
 def pl(p=None):
     """ plot to point p from last point (state machine)
         if no last point is stored, store p as last point and return
@@ -106,14 +106,21 @@ print("raster to model elevation scale:", raster_to_model_elev_scale)
 
 # TODO user input
 # gcode parameters
-LINE_FEED_RATE = 600 # 600 mm/min = 10 mm/sec speed for drawing
-MOVE_FEED_RATE = 1200 # speed for moves
+LINE_FEED_RATE = 30 * 60 # 600 mm/min = 10 mm/sec speed for drawing
+MOVE_FEED_RATE = 60 * 60 # speed for moves
 Z_SAFE_HEIGHT = round(dem_ar.max() * zraster_to_model_scale + 1, 3) # needs to be large enough to NOT touch the model anywhere!
 
 
 # Set mode here!
 # if False, will only create matplotlib preview, must be True to also send gcode to the printer
-do_plot = False 
+do_plot = True 
+
+# wrapper around send_now() to omit it for preview-only mode were do_plot is False
+def plot(gcode):
+    global do_plot, plotter
+    if do_plot == True:
+        #plotter.send_now(gcode)
+        plotter.send(gcode)
 
 # Establish connection to printer
 if do_plot:
@@ -123,36 +130,36 @@ if do_plot:
     COM = 'COM3' # TODO: user input (use the printrun desktop app to verify the port!)
 
     try:
-        p = printcore(COM, 115200) # printcore('/dev/ttyUSB0', 115200) on Mac or p.printcore('COM3',115200) on Windows
+        plotter = printcore(COM, 115200) # printcore('/dev/ttyUSB0', 115200) on Mac or p.printcore('COM3',115200) on Windows
     except Exception as e:
         print("Error with serial port", COM, e)
         sys.exit("Fix this and try again!")
 
     # wait until printer is online
-    while not p.online:
+    while not plotter.online:
         time.sleep(1)
-    print("Waiting for device to come online ... ", end="")
+        print("Waiting for device to come online ... ", end="")
     print("Device online!")
+    plot("M300 S560 P200") 
 
-
-# wrapper around send_now() to omit it for preview-only mode
-def plot(gcode):
-    global do_plot, p
-    if do_plot:
-        p.send_now("gcode")
 
 if do_plot:
-    print("I will home the x and y axis now. Manually lower z so that the pen makes contact with the bed.")
+    print("I will now home the x and y axis")
+    time.sleep(2)
+    #plot("M82 ;absolute extrusion mode")
+    plot("G28 X Y")  # home x y only as z will trigger bedprobe and heating!"
+    plot("M300 S220 P50")
+    plot("M121") # disable end stop i.e. will allow to go anywhere with z
+
+    print("Manually lower z so that the pen makes contact with the bed.")
     input("Press enter when you're done with z homing")
+    plot("M120") # enable endstops again
 
     print("Drawing reference rectangle")
 
-    print("M82 ;absolute extrusion mode")
-    print("G28 X Y ;home x y only as z will trigger bedprobe and heating!")
-
-# go to 0,0 
-plot(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
-pl((0,0))
+    # go to 0,0 
+    plot(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
+    pl((0,0))
 
 def G0(x,y): # convenience function
     plot(f"G0 X{x} Y{y} Z{0} F{LINE_FEED_RATE}")
@@ -171,7 +178,7 @@ print("Drawing reference rectangle done")
 
 
 # read in line shapefile from shp folder
-import shapefile
+import shapefile  # pip install pyshp
 shpfilename = "demin_lines_1m_z.shp"
 #shpfilename = "test.shp"
 shpfile = "shp/" + shpfilename
@@ -197,7 +204,7 @@ for lidx, ln in enumerate(shapes):
     # get value of first column as feature name
     ftname = sf.records()[lidx][0]
 
-    print("Drawing",lidx, ftname)
+    input("Hit enter to start drawing line #" + str(lidx) + " " + ftname)
 
     # Warn if line has multiple parts (should not happen) - will always use the first and only part for now
     if len(ln.parts) > 1: # single part lines will return [0]
@@ -253,7 +260,9 @@ for lidx, ln in enumerate(shapes):
 plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
 #print(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 
+print("close the preview to disconnect printer")
 plt.show() # quite the preview app to continue
 print("3D plot complete")
+plotter.disconnect()
 
 

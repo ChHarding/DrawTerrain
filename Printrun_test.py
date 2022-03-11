@@ -19,6 +19,13 @@ while not p.online:
   print("Waiting for device to come online ... ", end="")
 print("Device online!")
 
+#p.send_now("M501") # EEPROM info
+p.send_now("M300 S560 P200")  
+
+p.disconnect() # this is how you disconnect from the printer once you are done. This will also stop running prints.
+
+'''
+# send gcode from file
 gcode=[i.strip() for i in open('setup_rectangle.gcode')]
 gcode = gcoder.LightGCode(gcode)
 
@@ -29,4 +36,6 @@ p.send_now("M105") # get extruder temp
 p.send_now("M501") # EEPROM info
 #p.pause() # use these to pause/resume the current print
 #p.resume()
-#p.disconnect() # this is how you disconnect from the printer once you are done. This will also stop running prints.
+
+p.disconnect() # this is how you disconnect from the printer once you are done. This will also stop running prints.
+'''
