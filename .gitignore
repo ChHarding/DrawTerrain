@@ -14,7 +14,7 @@ old
 Printrun-master
 
 # logfile
-#logfile.txt
+logfile.txt
 
 .vscode
 #*.tif
