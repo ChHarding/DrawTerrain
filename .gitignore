@@ -1,7 +1,7 @@
 
 # folder for gcode created by the tool
-gcode
-.gcode
+#gcode
+#.gcode
 
 # old stuff that doesn't need to on github
 old 

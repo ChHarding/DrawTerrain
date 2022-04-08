@@ -1,13 +1,14 @@
 # Generates gcode from a DEM and line data (shape file)
 # Python 3
 # charding@iastate.edu
-# Jan. 21, 2022
+# April 8:  added gcode to file capability
 
 
 from sys import platform
 from osgeo import gdal # for reading geotiffs
 import matplotlib.pyplot as plt
 import numpy as np
+import time, sys
 
 
 # For visualizing tool path in matplotlib (aka preview mode)
@@ -93,7 +94,7 @@ zraster_to_model_scale = 0.1 * (hraster_to_model_scale + wraster_to_model_scale)
 # make numpy array with the real-world elevation values
 dem_ar = band.ReadAsArray()
 
-# TODO read base thickness and elev min max from logfile
+# TODO read in base thickness and elev min max from logfile.txt
 # elevation scaling: 0.6 - 27.720467 <- from logfile
 base_thickness = 0.6 # mm
 min_elev = 0.6 # mm
@@ -108,25 +109,32 @@ print("raster to model elevation scale:", raster_to_model_elev_scale)
 # gcode parameters
 LINE_FEED_RATE = 30 * 60 # 600 mm/min = 10 mm/sec speed for drawing
 MOVE_FEED_RATE = 60 * 60 # speed for moves
-Z_SAFE_HEIGHT = round(dem_ar.max() * zraster_to_model_scale + 1, 3) # needs to be large enough to NOT touch the model anywhere!
+Z_SAFE_HEIGHT = round(max_elev + 5, 3) # + buffer zone, needs to be large enough to NOT touch the model anywhere!
 
 
 # Set mode here!
 # if False, will only create matplotlib preview, must be True to also send gcode to the printer
-do_plot = True 
+do_plot = False 
+
+file_names = [] # empty, don't dump gcode to files
+#file_names = ["rectangle.gcode", "deming.gcode"] # put your 2 filenames in this list
 
 # wrapper around send_now() to omit it for preview-only mode were do_plot is False
 def plot(gcode):
-    global do_plot, plotter
+    global do_plot, plotter, file_names
     if do_plot == True:
-        #plotter.send_now(gcode)
+        #plotter.send_now(gcode)  # CH not sure if that makes a difference, still has a delay
         plotter.send(gcode)
+    
+    if file_names != []:
+        with open(file_names[0], "a") as fobj: # very slow :(
+            print(gcode, file=fobj)
+
 
 # Establish connection to printer
 if do_plot:
     # pip install pyserial  -> import serial
     from printrun.printcore import printcore # BTW I copied the printrun source into a local sub folder instead doing a proper install
-    import time, sys
     COM = 'COM3' # TODO: user input (use the printrun desktop app to verify the port!)
 
     try:
@@ -142,11 +150,16 @@ if do_plot:
     print("Device online!")
     plot("M300 S560 P200") 
 
+# Create empty files on disk so we can append to them during plotting
+for filename in file_names:
+    with open(filename, "w+") as fobj: # w+ overwrites existing file
+        print(";", filename, "\n", file=fobj)
+    
 
-if do_plot:
+if do_plot or file_names != []:
     print("I will now home the x and y axis")
     time.sleep(2)
-    #plot("M82 ;absolute extrusion mode")
+    plot("M82 ;absolute extrusion mode")
     plot("G28 X Y")  # home x y only as z will trigger bedprobe and heating!"
     plot("M300 S220 P50")
     plot("M121") # disable end stop i.e. will allow to go anywhere with z
@@ -156,7 +169,10 @@ if do_plot:
     plot("M120") # enable endstops again
 
     print("Drawing reference rectangle")
+    if file_names != []:
+        print("Will also store gcode in", file_names[0])
 
+    
     # go to 0,0 
     plot(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
     pl((0,0))
@@ -176,6 +192,9 @@ plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 #plt.show() # this will show the rectangle only    
 print("Drawing reference rectangle done")
 
+# switch to next gcode file name
+if file_names != []:
+    del file_names[0]
 
 # read in line shapefile from shp folder
 import shapefile  # pip install pyshp
@@ -191,11 +210,14 @@ assert sf.shapeTypeName == "POLYLINEZ" or sf.shapeTypeName == "POLYGON" , "Error
 shapes = sf.shapes() # get all shapes
 
 # Plot lines from shapefile
-if do_plot:
+if do_plot or file_names != []:
     print("Match the terrain print on the bed with the reference rectangle and clamp it down")
     input("Press Enter to start 3D plotting")
     print("Plotting lines from", shpfilename, "draped on", dem_filename)
+    plot("M82 ;absolute extrusion mode")
     plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # Ensure (again) that we're above the model!)
+if file_names != []:
+    print("Will also store gcode in", file_names[0])
 
 # run though all features
 for lidx, ln in enumerate(shapes):
@@ -205,6 +227,8 @@ for lidx, ln in enumerate(shapes):
     ftname = sf.records()[lidx][0]
 
     input("Hit enter to start drawing line #" + str(lidx) + " " + ftname)
+    plot("\n; " + 
+    ftname) # put feature name in gcode to indicate new section
 
     # Warn if line has multiple parts (should not happen) - will always use the first and only part for now
     if len(ln.parts) > 1: # single part lines will return [0]
@@ -260,9 +284,10 @@ for lidx, ln in enumerate(shapes):
 plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
 #print(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 
-print("close the preview to disconnect printer")
+print("close the preview window to disconnect printer")
 plt.show() # quite the preview app to continue
 print("3D plot complete")
-plotter.disconnect()
+
+if do_plot: plotter.disconnect()
 
 
