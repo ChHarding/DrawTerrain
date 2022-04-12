@@ -2,6 +2,7 @@
 # Python 3
 # charding@iastate.edu
 # April 8:  added gcode to file capability
+# Apr. 12: added clamp offsets
 
 
 from sys import platform
@@ -116,8 +117,13 @@ Z_SAFE_HEIGHT = round(max_elev + 5, 3) # + buffer zone, needs to be large enough
 # if False, will only create matplotlib preview, must be True to also send gcode to the printer
 do_plot = False 
 
-file_names = [] # empty, don't dump gcode to files
-#file_names = ["rectangle.gcode", "deming.gcode"] # put your 2 filenames in this list
+#file_names = [] # empty, don't dump gcode to files
+file_names = ["rectangle.gcode", "deming.gcode"] # put your 2 filenames in this list
+
+# Clamp offsets to account for space the clamps need (in mm)
+CLAMP_OFFSET_X = 80
+CLAMP_OFFSET_Y = 80
+
 
 # wrapper around send_now() to omit it for preview-only mode were do_plot is False
 def plot(gcode):
@@ -174,12 +180,12 @@ if do_plot or file_names != []:
 
     
     # go to 0,0 
-    plot(f"G0 X{0} Y{0} Z{0} F{MOVE_FEED_RATE}")
-    pl((0,0))
+    plot(f"G0 X{0+CLAMP_OFFSET_X} Y{0+CLAMP_OFFSET_Y} Z{0} F{MOVE_FEED_RATE}")
+    pl((0+CLAMP_OFFSET_X, 0+CLAMP_OFFSET_Y))
 
 def G0(x,y): # convenience function
-    plot(f"G0 X{x} Y{y} Z{0} F{LINE_FEED_RATE}")
-    pl((x,y))
+    plot(f"G0 X{x+CLAMP_OFFSET_X} Y{y+CLAMP_OFFSET_Y} Z{0} F{LINE_FEED_RATE}")
+    pl((x+CLAMP_OFFSET_X, y+CLAMP_OFFSET_Y))
 
 # draw boundary with 0/0 in left lower corner 
 G0(mmwidth, 0)
@@ -188,7 +194,7 @@ G0(0, mmheight)
 G0(0, 0)
 
 # lift head to safe height
-plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
+plot(f"G0 X{0+CLAMP_OFFSET_X} Y{0+CLAMP_OFFSET_Y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 #plt.show() # this will show the rectangle only    
 print("Drawing reference rectangle done")
 
@@ -215,7 +221,7 @@ if do_plot or file_names != []:
     input("Press Enter to start 3D plotting")
     print("Plotting lines from", shpfilename, "draped on", dem_filename)
     plot("M82 ;absolute extrusion mode")
-    plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # Ensure (again) that we're above the model!)
+    plot(f"G0 X{0+CLAMP_OFFSET_X} Y{0+CLAMP_OFFSET_Y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # Ensure (again) that we're above the model!)
 if file_names != []:
     print("Will also store gcode in", file_names[0])
 
@@ -268,23 +274,27 @@ for lidx, ln in enumerate(shapes):
         z = round(z, 3)
 
         #print(x,y)
-        pl((x,y))
+        pl((x+CLAMP_OFFSET_X, y+CLAMP_OFFSET_Y))
 
         if pidx == 0: # need to move up and fly to first point
-            plot(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
+            plot(f"G0 X{x+CLAMP_OFFSET_X} Y{y+CLAMP_OFFSET_Y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
             #print(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 
-        plot(f"G0 X{x} Y{y} Z{z} F{LINE_FEED_RATE}")
+        plot(f"G0 X{x+CLAMP_OFFSET_X} Y{y+CLAMP_OFFSET_Y} Z{z} F{LINE_FEED_RATE}")
         #print(f"G0 X{x} Y{y} Z{z} F{LINE_FEED_RATE}")
         pidx += 1
 
-    plot(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # lift back to safe height
+    plot(f"G0 X{x+CLAMP_OFFSET_X} Y{y+CLAMP_OFFSET_Y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # lift back to safe height
     #print(f"G0 X{x} Y{y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}\n") # lift back to safe height
 
-plot(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
+plot(f"G0 X{0+CLAMP_OFFSET_X} Y{0+CLAMP_OFFSET_Y} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}") # goto origin, lift back to safe height
 #print(f"G0 X{0} Y{0} Z{Z_SAFE_HEIGHT} F{MOVE_FEED_RATE}")
 
 print("close the preview window to disconnect printer")
+
+# show full 400 x 400 buildplate
+plt.xlim((0, 400))
+plt.ylim((0, 400.000001))
 plt.show() # quite the preview app to continue
 print("3D plot complete")
 
